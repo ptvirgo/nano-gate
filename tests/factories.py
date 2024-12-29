@@ -3,9 +3,11 @@
 
 from datetime import datetime, timedelta
 from random import random, randint
+
 import factory
 import factory.fuzzy as fuzzy
 
+import xno_gate.core as xno
 
 class FakeHistory():
     """Fake the output of a nano history response message, per the RPC protocol spec."""
@@ -32,17 +34,12 @@ class FakeHistory():
 class FakeReceive():
     """Fake the output of a nano receivable response message, per the protocol spec."""
 
-    def __init__(self, block, amount=None):
+    def __init__(self, block, amount):
         self.block = block
         self.amount = amount
 
     def __iter__(self):
-
-        if self.amount:
-            yield (self.block, self.amount)
-
-        else:
-            yield self.block
+        yield (self.block, self.amount)
 
 
 def fake_hash():
@@ -53,6 +50,15 @@ def fake_hash():
         yield f"FAKE_HASH_DUMB_{i:03}"
 
 
+class PaymentFactory(factory.Factory):
+
+    class Meta:
+        model = xno.Payment
+
+    amount = factory.LazyAttribute(lambda o: xno.to_raw(random()))
+    when = factory.Faker("past_datetime", start_date=datetime(2020, 1, 1, 10, 30, 16, 0))
+
+
 class HistoryFactory(factory.Factory):
 
     class Meta:
@@ -61,7 +67,7 @@ class HistoryFactory(factory.Factory):
     history_type = fuzzy.FuzzyChoice(["send", "receive"])
     account = fuzzy.FuzzyChoice(["nano_1ipx847tk8o46pwxt5qjdbncjqcbwcc1rrmqnkztrfjy5k7z4imsrata9est", "nano_3qgtign8zoehkhdt1atf1qm6m7ui5kgwin8tjnjrzdidtgjy1xr7d156ib5q"])
 
-    amount = factory.LazyAttribute(lambda o: random() * (10 ** 30))
+    amount = factory.LazyAttribute(lambda o: xno.to_raw(random()))
 
     @factory.lazy_attribute
     def local_timestamp(self):
@@ -77,15 +83,6 @@ class ReceiveFactory(factory.Factory):
 
     class Meta:
         model = FakeReceive
-        exclude = ("with_amount",)
 
-    with_amount = True
     block = factory.Iterator(fake_hash())
-
-    @factory.lazy_attribute
-    def amount(self):
-
-        if self.with_amount:
-            return random() * (10 ** 30)
-        else:
-            return
+    amount = factory.LazyAttribute(lambda o: xno.to_raw(random()))
