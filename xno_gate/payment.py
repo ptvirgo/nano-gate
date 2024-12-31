@@ -5,9 +5,8 @@
 # Entities
 
 class Received:
-    
+
     def __init__(self, amount, time):
-    
         """Represent a *received* payment.
 
         Args:

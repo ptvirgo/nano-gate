@@ -2,16 +2,13 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
-from random import random, randint
 
 import factory
-import factory.fuzzy as fuzzy
-
-from gate.payment import Received, Receivable
+from xno_gate.payment import Received, Receivable
 
 
 class ReceivedFactory(factory.Factory):
-    
+
     class Meta:
         model = Received
 

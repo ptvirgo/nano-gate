@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xno_gate"
+version = "0.0.1"
+description = "A nano currency pay-gate. Checks whether a payment has been received, without caring about the source."
+requires-python = ">=3.8"
+dependencies = [
+    "requests"
+]
+
+[project.scripts]
+been-paid = "xno_gate.__main__:been_paid"
