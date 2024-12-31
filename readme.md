@@ -9,3 +9,13 @@ This plays to the strengths of digital content - it is duplicable and can be del
 ## So ... make one
 
 Function should accept a string account identifier, an integer representing an amount of nano, an integer representing seconds, and a node rpc url. It should produce a boolean: true if the account has been sent at least as many nano as requested within the given time frame. Essentially allowing questions like - "has account X received at least 2 nano in the past 300 seconds?"
+
+
+## Use cases - answer these questions
+
+- Has a single payment of {amount} been made to {nano address} within the past {number of seconds}?
+    - When was the last time a payment of {amount} was made to {nano address}?
+- What's the total amount of raw received by {nano address} within the past {number of seconds}?
+
+- Is a single payment of {amount} pending to {nano address}?
+- What's the total amount pending to {nano address}?
