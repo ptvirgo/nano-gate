@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xno_gate"
-version = "0.0.1"
+version = "0.0.2"
 description = "A nano currency pay-gate. Checks whether a payment has been received, without caring about the source."
 requires-python = ">=3.8"
 dependencies = [
