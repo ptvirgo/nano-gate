@@ -99,10 +99,7 @@ class DefaultRPCInterface(XnoInterface):
         if "blocks" not in jsr:
             raise ValueError(f"RPC call unable to acquire receivable blocks. status: {result.status_code}")
 
-        if jsr["blocks"] is str:
-            raise ValueError("RPC call unable to acquire receivable blocks, but it's probably an API server that fakes an empty value instead of admitting that the call is unsupported.")
-
-        if jsr["blocks"] is dict:
+        if type(jsr["blocks"]) is dict:
             return [Receivable(int(amount)) for amount in jsr["blocks"].values()]
 
         return
