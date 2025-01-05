@@ -11,10 +11,11 @@ import pytest
 
 class FakeInterface(xno_gate.XnoInterface):
 
-    def __init__(self, received, receivable):
+    def __init__(self, received, receivable, rate_limit=0):
         self._received = received
         self._receivable = receivable
         self._lock_state = None
+        self.rate_limit = rate_limit
 
     def received(self, _, count=10):
         return self._received[:count]
@@ -22,8 +23,12 @@ class FakeInterface(xno_gate.XnoInterface):
     def receivable(self, _, threshold=10 ** 30):
         return [rec for rec in self._receivable if rec.amount >= threshold]
 
-    def save_lock_state(self, unlocked, until):
-        self._lock_state = LockState(unlocked, until)
+    def save_lock_state(self, unlocked, until=None):
+
+        if until is None and self.rate_limit < 1:
+            return
+
+        self._lock_state = LockState(unlocked, until or datetime.now() + timedelta(seconds=self.rate_limit))
 
     def load_lock_state(self):
         return self._lock_state
@@ -39,10 +44,11 @@ standard_payments = \
 
 class UnlockableInterface(xno_gate.XnoInterface):
 
-    def __init__(self):
+    def __init__(self, rate_limit=0):
         self._received = dict()
         self._receivable = dict()
         self._lock_state = None
+        self.rate_limit = rate_limit
 
     def add_received(self, account, received):
         self._received[account] = received
@@ -64,8 +70,12 @@ class UnlockableInterface(xno_gate.XnoInterface):
 
         return []
 
-    def save_lock_state(self, unlocked, until):
-        self._lock_state = LockState(unlocked, until)
+    def save_lock_state(self, unlocked, until=None):
+
+        if until is None and self.rate_limit < 1:
+            return
+
+        self._lock_state = LockState(unlocked, until or datetime.now() + timedelta(seconds=self.rate_limit))
 
     def load_lock_state(self):
         return self._lock_state
@@ -234,11 +244,68 @@ def test_default_rpc_save_lock_state(tmp_path):
     assert result.until == expect.until
 
 
-def test_gate_prefers_cache():
-    """Make sure the gate will prefer a cache to a lookup if an unexpired cache exists."""
+@pytest.fixture
+def unlocked_gate_with_cache():
+    def make_gate(key):
+        received = [ReceivedFactory(amount=key.amount, time=datetime.now())]
+        iface = FakeInterface(received, [], rate_limit=30)
+        gate = xno_gate.Gate(iface)
+        gate.add_key(key.account, key.amount, key.timeout)
+        return gate
 
-    received = [ReceivedFactory(time=datetime.now())]
-    iface = FakeInterface(received, [])
+    return make_gate
+
+
+def test_gate_saves_when_locked():
+    """Gate caches the locked result via the interface."""
+    iface = FakeInterface([], [], rate_limit=30)
     gate = xno_gate.Gate(iface)
 
-    assert False
+    assert not gate.unlocked()
+
+    cached = iface.load_lock_state().until - datetime.now()
+    assert cached > timedelta(seconds=29) and cached <= timedelta(seconds=30)
+
+
+def test_gate_saves_when_unlocked(unlocked_gate_with_cache):
+    """Make sure the gate saves a cache when it is unlocked."""
+    key = KeyFactory(timeout=60)
+    gate = unlocked_gate_with_cache(key)
+    unlocked_until = gate.unlocked()
+
+    seconds_unlocked = unlocked_until - datetime.now()
+    assert seconds_unlocked > timedelta(seconds=59) and seconds_unlocked <= timedelta(seconds=60)
+    assert gate.xno_interface.load_lock_state().until == unlocked_until
+
+
+def test_gate_prefers_cache(unlocked_gate_with_cache):
+    """Make sure the gate prefers the cache when it is in the future."""
+    key = KeyFactory(timeout=60)
+    gate = unlocked_gate_with_cache(key)
+
+    assert gate.unlocked() is not None
+
+    # if the cache is in the future, use it, even if it delays noticing a payment
+    lock_state = LockStateFactory(unlocked=False)  # assumes factory only produces future dates
+    gate.xno_interface.save_lock_state(lock_state.unlocked, lock_state.until)
+    assert gate.unlocked() is None
+
+    # cache should not have changed
+    updated_state = gate.xno_interface.load_lock_state()
+    assert updated_state.unlocked == lock_state.unlocked
+    assert updated_state.until == lock_state.until
+
+
+def test_gate_ignores_expired(unlocked_gate_with_cache):
+    """Make sure the gate ignores expired cache."""
+    key = KeyFactory(timeout=60)
+    gate = unlocked_gate_with_cache(key)
+
+    # if the cache is in the past, ignore it and save the next lookup
+    gate.xno_interface.save_lock_state(False, datetime.now() - timedelta(seconds=1))
+
+    unlocked_until = gate.unlocked()
+    seconds_unlocked = unlocked_until - datetime.now()
+
+    assert seconds_unlocked > timedelta(seconds=59) and seconds_unlocked <= timedelta(seconds=60)
+    assert gate.xno_interface.load_lock_state().until == unlocked_until

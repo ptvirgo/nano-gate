@@ -41,4 +41,4 @@ class LockStateFactory(factory.Factory):
         model = LockState
 
     unlocked = factory.Faker("boolean")
-    until = factory.Faker("date_time_between", start_date=datetime.now() - timedelta(days=1), end_date=datetime.now() + timedelta(days=1))
+    until = factory.Faker("future_datetime")

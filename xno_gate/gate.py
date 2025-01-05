@@ -238,18 +238,31 @@ class Gate():
             Output: a future datetime (when it will be locked again) if unlocked, or None if locked.
         """
         now = datetime.now()
+        lock_state = self.xno_interface.load_lock_state()
 
+        # Defer to cache
+        if lock_state and lock_state.until > now:
+
+            if lock_state.unlocked:
+                return lock_state.until
+
+            return
+
+        # Check keys
         for key in sorted(self.keys.values(), key=lambda k: k.timeout, reverse=True):
             timeout = timedelta(seconds=key.timeout)
             cutoff = now - timeout
 
             if key.receivable and self.has_receivable(key.account, key.amount):
+                self.xno_interface.save_lock_state(True, now + timeout)
                 return now + timeout
 
             payment = self.been_paid(key.account, key.amount)
             if payment and payment > cutoff:
+                self.xno_interface.save_lock_state(True, payment + timeout)
                 return payment + timeout
 
+        self.xno_interface.save_lock_state(False)
         return
 
     @staticmethod
