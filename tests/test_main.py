@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
-from tests.factories import KeyFactory, ReceivedFactory, ReceivableFactory
+from tests.factories import KeyFactory, LockStateFactory, ReceivedFactory, ReceivableFactory
+from xno_gate.entities import LockState
 import xno_gate.gate as xno_gate
 
 import pytest
@@ -13,12 +14,19 @@ class FakeInterface(xno_gate.XnoInterface):
     def __init__(self, received, receivable):
         self._received = received
         self._receivable = receivable
+        self._lock_state = None
 
     def received(self, _, count=10):
         return self._received[:count]
 
     def receivable(self, _, threshold=10 ** 30):
         return [rec for rec in self._receivable if rec.amount >= threshold]
+
+    def save_lock_state(self, unlocked, until):
+        self._lock_state = LockState(unlocked, until)
+
+    def load_lock_state(self):
+        return self._lock_state
 
 
 standard_payments = \
@@ -34,6 +42,7 @@ class UnlockableInterface(xno_gate.XnoInterface):
     def __init__(self):
         self._received = dict()
         self._receivable = dict()
+        self._lock_state = None
 
     def add_received(self, account, received):
         self._received[account] = received
@@ -54,6 +63,12 @@ class UnlockableInterface(xno_gate.XnoInterface):
             return [self._receivable[account]]
 
         return []
+
+    def save_lock_state(self, unlocked, until):
+        self._lock_state = LockState(unlocked, until)
+
+    def load_lock_state(self):
+        return self._lock_state
 
 
 @pytest.fixture
@@ -96,10 +111,11 @@ def test_total_receivable(standard_gate):
     assert standard_gate.total_receivable("arbitrary") == 1500
 
 
-def test_history_to_payment():
+def test_history_to_payment(tmp_path):
     "Verify account history transaction record as a Payment object."
 
-    rpc = xno_gate.DefaultRPCInterface("not a proxy lol")
+    cache = tmp_path / "rpc_cache.json"
+    rpc = xno_gate.DefaultRPCInterface("not a proxy lol", cache)
 
     payment = rpc._history_to_received(
         {
@@ -130,7 +146,7 @@ def test_history_to_payment():
     assert sent is None
 
 
-def test_gate_unlockable():
+def test_gate_unlocks():
     """Make sure a gate can be locked or unlocked."""
 
     iface = UnlockableInterface()
@@ -158,8 +174,8 @@ def test_gate_unlockable():
     assert difference >= timedelta(seconds=0) and difference < timedelta(seconds=2)
 
 
-def test_gate_stays_open_longest():
-    """When a gate is open, it should stay open for the longest available time period."""
+def test_gate_stays_unlocked():
+    """When a gate is unlocked, it should stay unlocked for the longest available time period."""
 
     iface = UnlockableInterface()
     gate = xno_gate.Gate(iface)
@@ -181,7 +197,7 @@ def test_gate_stays_open_longest():
 
 
 def test_gate_handles_receivables():
-    """When we accept receivables, the gate opens."""
+    """When we accept receivables, the gate unlocked."""
     iface = UnlockableInterface()
     gate = xno_gate.Gate(iface)
 
@@ -197,3 +213,32 @@ def test_gate_handles_receivables():
 
     gate.add_key(key.account, key.amount, key.timeout, receivable=True)
     assert gate.unlocked() >= datetime.now() + timedelta(seconds=key.timeout - 1)
+
+
+def test_default_rpc_save_lock_state(tmp_path):
+    """Make sure the default RPC can save and "unlocked" load dates for the cache."""
+
+    cache = tmp_path / "rpc_cache.json"
+
+    saver = xno_gate.DefaultRPCInterface("Not a real proxy.", cache)
+    loader = xno_gate.DefaultRPCInterface("Still not a proxy.", cache)
+
+    assert loader.load_lock_state() is None
+
+    expect = LockStateFactory()
+
+    saver.save_lock_state(expect.unlocked, expect.until)
+    result = loader.load_lock_state()
+
+    assert result.unlocked == expect.unlocked
+    assert result.until == expect.until
+
+
+def test_gate_prefers_cache():
+    """Make sure the gate will prefer a cache to a lookup if an unexpired cache exists."""
+
+    received = [ReceivedFactory(time=datetime.now())]
+    iface = FakeInterface(received, [])
+    gate = xno_gate.Gate(iface)
+
+    assert False

@@ -4,8 +4,9 @@
 import abc
 from datetime import datetime, timedelta
 import requests
+import json
 
-from xno_gate.payment import Key, Received, Receivable
+from xno_gate.entities import Key, LockState, Received, Receivable
 
 "Provide means for the admin to determine whether appropriate payments have been made or are pending."
 
@@ -38,20 +39,37 @@ class XnoInterface(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def save_lock_state(self, unlocked, until=None):
+        """The gate is unlocked. Save a future datetime for when it might close again, so we don't need to query the RPC servers when we already know that the gate is unlocked.
+
+        Arguments:
+            unlocked: boolean, True if the gate is unlocked, False otherwise.
+            until: datetime, a future time. The saved state is valid until this time.
+        """
+        pass
+
+    @abc.abstractmethod
+    def load_lock_state(self):
+        """Check the cache to see if the gate is still unlocked from a previously saved lookup."""
+        pass
+
 
 class DefaultRPCInterface(XnoInterface):
 
-    def __init__(self, proxy, lookback=25):
+    def __init__(self, proxy, cache_file, lookback=25, rate_limit=60):
         """Provide an interface to the nano Node RPC protocol.
 
         Arguments:
             proxy: str, url for an RPC node.
+            cache_file: pathlib.Path to a json file that will be used to cache unlocked/locked lookup results.
             lookback: maximum number of transaction records to review for the account_history, per RPC spec.
-
+            rate_limit: int, default number of seconds to apply on cached unlocked/locked lookup results.
         """
-
         self.proxy = proxy
         self.lookback = lookback
+        self._cache_file = cache_file
+        self._rate_limit = rate_limit
 
     @staticmethod
     def _history_to_received(history):
@@ -104,11 +122,33 @@ class DefaultRPCInterface(XnoInterface):
 
         return
 
+    def save_lock_state(self, unlocked, until=None):
+
+        if until is None:
+            until = datetime.now() + timedelta(seconds=self._rate_limit)
+
+        data = {"unlocked": unlocked, "until": until.timestamp()}
+
+        with open(self._cache_file, "w") as f:
+            json.dump(data, f)
+
+        return
+
+    def load_lock_state(self):
+
+        if not self._cache_file.exists():
+            return
+
+        with open(self._cache_file, "r") as f:
+            data = json.load(f)
+
+        return LockState(data["unlocked"], datetime.fromtimestamp(data["until"]))
+
 
 class Gate():
 
     def __init__(self, xno_interface):
-        """Use the interface to verify payments, for the purposes of being open or closed.
+        """Use the interface to verify payments, for the purposes of being unlocked or locked.
 
         Arguments:
             xno_interface: an XnoInterface
@@ -188,14 +228,14 @@ class Gate():
         Arguments:
             account: str, the nano public address to check
             amount: int, amount in raw
-            timout: int, number of seconds gate should open after a payment to the account is made
+            timout: int, number of seconds gate should unlocked after a payment to the account is made
             receivable: boolean, do we care about payments that are receivable but not yet received?
         """
         self.keys[account] = Key(account, amount, timeout, receivable)
 
     def unlocked(self):
         """Is the gate unlocked?
-            Output: a future datetime (when it will be locked again) if open, or None if closed.
+            Output: a future datetime (when it will be locked again) if unlocked, or None if locked.
         """
         now = datetime.now()
 
