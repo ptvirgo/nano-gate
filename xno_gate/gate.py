@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import abc
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 
-from xno_gate.payment import Received, Receivable
+from xno_gate.payment import Key, Received, Receivable
 
 "Provide means for the admin to determine whether appropriate payments have been made or are pending."
 
@@ -115,6 +115,7 @@ class Gate():
         """
 
         self.xno_interface = xno_interface
+        self.keys = dict()
 
     def _received(self, account):
         """Produce the Received transactions for a given account, sorted in reverse date order."""
@@ -180,6 +181,36 @@ class Gate():
             total += payment.amount
 
         return total
+
+    def add_key(self, account, amount, timeout, receivable=False):
+        """Add a Key that can make the gate "unlocked."
+
+        Arguments:
+            account: str, the nano public address to check
+            amount: int, amount in raw
+            timout: int, number of seconds gate should open after a payment to the account is made
+            receivable: boolean, do we care about payments that are receivable but not yet received?
+        """
+        self.keys[account] = Key(account, amount, timeout, receivable)
+
+    def unlocked(self):
+        """Is the gate unlocked?
+            Output: a future datetime (when it will be locked again) if open, or None if closed.
+        """
+        now = datetime.now()
+
+        for key in sorted(self.keys.values(), key=lambda k: k.timeout, reverse=True):
+            timeout = timedelta(seconds=key.timeout)
+            cutoff = now - timeout
+
+            if key.receivable and self.has_receivable(key.account, key.amount):
+                return now + timeout
+
+            payment = self.been_paid(key.account, key.amount)
+            if payment and payment > cutoff:
+                return payment + timeout
+
+        return
 
     @staticmethod
     def to_raw(x):

@@ -4,7 +4,7 @@
 from datetime import datetime, timedelta
 
 import factory
-from xno_gate.payment import Received, Receivable
+from xno_gate.payment import Key, Received, Receivable
 
 
 class ReceivedFactory(factory.Factory):
@@ -22,3 +22,14 @@ class ReceivableFactory(factory.Factory):
         model = Receivable
 
     amount = factory.Faker("random_int", min=10 ** 30, max=5 * 10 ** 30)
+
+
+class KeyFactory(factory.Factory):
+
+    class Meta:
+        model = Key
+
+    account = factory.Faker("lexify", text="nano_??????????")
+    amount = factory.Faker("random_int", min=0.5 * 10 ** 30, max=5 * 10 ** 30)
+    timeout = factory.Faker("random_int", min=300, max=3600)
+    receivable = False

@@ -35,3 +35,21 @@ class Receivable:
 
     def __iter__(self):
         yield ("amount", self.amount)
+
+
+class Key:
+
+    def __init__(self, account, amount, timeout, receivable):
+        """If this account has been paid, how long should the gate be open?
+
+        Args:
+            account: str, xno address / public account id
+            amount: int, required minimum payment
+            timeout: int, seconds for the gate to remain open upon payment
+            receivable: boolean, do we care about payments that are receivable but not yet received?
+        """
+
+        self.account = account
+        self.amount = amount
+        self.timeout = timeout
+        self.receivable = receivable
