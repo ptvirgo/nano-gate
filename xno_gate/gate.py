@@ -104,18 +104,20 @@ class DefaultRPCInterface(XnoInterface):
         return filter(None, [self._history_to_received(h) for h in jsr["history"]])
 
     def receivable(self, account, threshold=10 ** 30):
+
+        threshold_string = "{:d}".format(int(threshold))
         rpc_call = \
             {
                 "action": "receivable",
                 "account": account,
-                "threshold": str(threshold)
+                "threshold": threshold_string,
             }
 
         result = requests.post(self.proxy, json=rpc_call)
         jsr = result.json()
 
         if "blocks" not in jsr:
-            raise ValueError(f"RPC call unable to acquire receivable blocks. status: {result.status_code}")
+            raise ValueError(f"RPC call unable to acquire receivable blocks. status: {result.status_code}, msg: {result.json()}")
 
         if type(jsr["blocks"]) is dict:
             return [Receivable(int(amount)) for amount in jsr["blocks"].values()]
@@ -140,7 +142,10 @@ class DefaultRPCInterface(XnoInterface):
             return
 
         with open(self._cache_file, "r") as f:
-            data = json.load(f)
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                return
 
         return LockState(data["unlocked"], datetime.fromtimestamp(data["until"]))
 
