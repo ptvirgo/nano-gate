@@ -18,6 +18,19 @@ You should have received a copy of the GNU General Public License along with xno
 """Minimal CLI demo of the gate."""
 
 
+class CachelessRPCInterface(xno_gate.DefaultRPCInterface):
+    """CLI only - RPC interface with null caching operations."""
+
+    def __init__(self, proxy):
+        super().__init__(proxy, None)
+
+    def save_lock_state(*args, **kwargs):
+        return
+
+    def load_lock_state(*args, **kwargs):
+        return
+
+
 def cli_args():
     """Get the arguments from the CLI."""
 
@@ -33,7 +46,7 @@ def been_paid():
     "Ask the Nano RPC when the last time an account received some nano."
 
     args = cli_args()
-    rpc = xno_gate.DefaultRPCInterface(args.proxy)
+    rpc = CachelessRPCInterface(args.proxy)
     gate = xno_gate.Gate(rpc)
 
     amount = gate.to_raw(args.amount)
