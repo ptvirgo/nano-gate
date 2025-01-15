@@ -2,7 +2,7 @@
 
 This is for [nano-currency](https://nano.org/en).
 
-A **pay-gate** is similar to a pay-wall, with one key distinction. A *pay-wall* requires that every individual pay for access to content. A *pay-gate* allows everyone to access content for a period of time, provided that a payment has been delivered. Exactly as the name implies - when a gate is closed, no one gets in. As long as it's omen, *everyone can come in.*
+A **pay-gate** is similar to a pay-wall, with one key distinction. A *pay-wall* requires that every individual pay for access to content. A *pay-gate* allows everyone to access content for a period of time, provided that a payment has been delivered. Exactly as the name implies - when a gate is closed, no one gets in. As long as it's open, *everyone can come in.*
 
 This plays to the strengths of digital content - it is duplicable and can be delivered anonymously, rather than trying to fight it by imposing artificial scarcity.
 

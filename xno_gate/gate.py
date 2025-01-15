@@ -210,7 +210,11 @@ class Gate():
         """
 
         receivable = self.xno_interface.receivable(account, amount)
-        return len(receivable) > 0
+
+        if receivable:
+            return len(receivable) > 0
+        else:
+            return False
 
     def total_receivable(self, account):
         """What's the total receivable to {account}?
